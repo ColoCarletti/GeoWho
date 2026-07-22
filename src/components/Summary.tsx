@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Person } from "../types";
-import { MAX_SCORE, msUntilTomorrow } from "../lib/game";
+import { MAX_SCORE, dayNumber, msUntilTomorrow, shareText } from "../lib/game";
 
 interface Props {
   people: Person[];
@@ -23,7 +23,28 @@ export default function Summary({ people, scores }: Props) {
     return () => clearInterval(id);
   }, []);
 
+  const [shared, setShared] = useState(false);
   const total = scores.reduce((sum, s) => sum + s, 0);
+
+  async function share() {
+    const text = shareText(scores, dayNumber(), window.location.href);
+    // Prefer the native share sheet (mobile); fall back to the clipboard.
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        // User dismissed the sheet, or it's unavailable — fall through to copy.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {
+      // Clipboard blocked (e.g. insecure context) — nothing else we can do.
+    }
+  }
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
@@ -54,6 +75,13 @@ export default function Summary({ people, scores }: Props) {
           </div>
         ))}
       </div>
+
+      <button
+        onClick={share}
+        className="rounded-full bg-teal-600 px-6 py-2.5 font-semibold text-white transition-colors hover:bg-teal-500 active:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
+      >
+        {shared ? "Copied!" : "Share results"}
+      </button>
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Come back tomorrow for 3 new figures ·{" "}

@@ -45,6 +45,42 @@ export function applyPick(round: RoundState, targetId: string, pickId: string): 
   return { ...round, result: pickId === targetId ? STAGE_SCORES[2] : 0 };
 }
 
+// --- sharing ----------------------------------------------------------------
+
+/** Emoji for each score, so a run reads at a glance without spoilers. */
+const SCORE_EMOJI: Record<number, string> = {
+  [STAGE_SCORES[0]]: "🟢", // first try
+  [STAGE_SCORES[1]]: "🟡", // after one hint
+  [STAGE_SCORES[2]]: "🟠", // multiple choice
+  0: "⬛", // missed
+};
+
+/** Tries it took to land a score (for the per-figure breakdown). */
+const scoreTries = (score: number): number =>
+  score === 0 ? ROUNDS : STAGE_SCORES.indexOf(score) + 1;
+
+/**
+ * A shareable, spoiler-free recap of a finished day: puzzle number, total,
+ * an emoji line, and a per-figure tries breakdown. `url`, if given, is appended
+ * so friends can jump straight to today's puzzle.
+ */
+export function shareText(scores: number[], day: number = dayNumber(), url = ""): string {
+  const total = scores.reduce((sum, s) => sum + s, 0);
+  const emoji = scores.map((s) => SCORE_EMOJI[s] ?? "⬛").join("");
+  const lines = scores.map((s, i) => {
+    const tries = scoreTries(s);
+    const attempt = s === 0 ? "missed" : `${tries} ${tries === 1 ? "try" : "tries"}`;
+    return `${SCORE_EMOJI[s] ?? "⬛"} Figure ${i + 1} · +${s} (${attempt})`;
+  });
+  return [
+    `GeoWho #${day} — ${total}/${MAX_SCORE} 🌍`,
+    emoji,
+    "",
+    ...lines,
+    ...(url ? ["", url] : []),
+  ].join("\n");
+}
+
 // --- date helpers -----------------------------------------------------------
 
 /** Day 0 of the puzzle sequence (local time). */
