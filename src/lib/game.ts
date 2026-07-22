@@ -47,8 +47,12 @@ export function applyPick(round: RoundState, targetId: string, pickId: string): 
 
 // --- date helpers -----------------------------------------------------------
 
-/** Day 0 of the puzzle sequence (local time). */
-const EPOCH = Date.UTC(2024, 0, 1);
+/**
+ * Day 0 of the puzzle sequence — the launch date, so puzzle numbering starts at
+ * #1 (shown as dayNumber() + 1). Set this to your real go-live date; it also
+ * anchors which figures appear on which day.
+ */
+const EPOCH = Date.UTC(2026, 6, 22); // 2026-07-22
 
 /** Local calendar date as YYYY-MM-DD — the key for "today's" puzzle. */
 export function dateKey(d: Date = new Date()): string {
