@@ -6,6 +6,10 @@ export interface Person {
   name: string;
   /** Fame proxy: number of Wikipedia language editions (used to rank search). */
   fame: number;
+  /** Signed birth year (negative = BCE); used to rank era-similar options. */
+  birthYear: number;
+  /** Signed death year (negative = BCE). */
+  deathYear: number;
   /** Exact birth date, formatted to its real precision, e.g. "14 March 1879". */
   birth: string;
   /** Exact death date, e.g. "18 April 1955". */
@@ -30,8 +34,20 @@ export interface Clue {
   value: string;
 }
 
-/** Where a round is: still guessing, solved, or given up. */
-export type GameStatus = "playing" | "won" | "revealed";
+/**
+ * The state of the daily game, persisted to localStorage.
+ *
+ * The round in progress is `scores.length` (0-based); the day is finished once
+ * `scores.length === ROUNDS`. `wrong`/`result` describe that in-progress round:
+ * the ids guessed wrong so far, and the final round score once it's decided
+ * (null while still guessing — the player hasn't pressed "Next" yet).
+ */
+export interface DailyProgress {
+  dateKey: string;
+  scores: number[];
+  wrong: string[];
+  result: number | null;
+}
 
 /** The base world map, pre-rendered to an SVG path. */
 export interface WorldMap {
