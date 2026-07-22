@@ -1,0 +1,38 @@
+/** A famous historical figure — the thing the player guesses. */
+export interface Person {
+  /** Wikidata QID, e.g. "Q937". */
+  id: string;
+  /** Common English name, e.g. "Albert Einstein". */
+  name: string;
+  /** Fame proxy: number of Wikipedia language editions (used to rank search). */
+  fame: number;
+  /** Exact birth date, formatted to its real precision, e.g. "14 March 1879". */
+  birth: string;
+  /** Exact death date, e.g. "18 April 1955". */
+  death: string;
+  /** Birthplace projected to map pixels (matches world.json viewBox). */
+  bx: number;
+  by: number;
+  /** Place of death projected to map pixels. */
+  dx: number;
+  dy: number;
+  /** Big category, e.g. "Science" (clue 1). */
+  domain: string;
+  /** Representative occupation, e.g. "physicist" (clue 2). */
+  occupation: string;
+  /** Country of birth, e.g. "Germany" (clue 3). */
+  country: string;
+}
+
+/** A progressively-revealed clue. */
+export interface Clue {
+  label: string;
+  value: string;
+}
+
+/** The base world map, pre-rendered to an SVG path. */
+export interface WorldMap {
+  w: number;
+  h: number;
+  land: string;
+}
