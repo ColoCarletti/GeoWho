@@ -5,8 +5,11 @@ import {
   STAGE_SCORES,
   MAX_SCORE,
   OPTION_COUNT,
+  SHARE_URL,
   getDailyPeople,
+  getRandomPerson,
   buildOptions,
+  buildShareText,
   newRound,
   stageOf,
   applyGuess,
@@ -68,6 +71,22 @@ check("excludes already-wrong guesses", (() => {
   return !buildOptions(target, 0, [other.id]).some((p) => p.id === other.id);
 })());
 console.log("  " + target.name + " options:", opts.map((p) => p.name).join(", "));
+
+console.log("\nPractice (random):");
+const r1 = getRandomPerson();
+check("returns a valid person", Boolean(r1?.id && r1?.name));
+check("exclude avoids immediate repeat", (() => {
+  for (let i = 0; i < 50; i++) if (getRandomPerson(r1.id).id === r1.id) return false;
+  return true;
+})());
+
+console.log("\nShare text:");
+const share = buildShareText([100, 50, 0], 122);
+check("has header with total / max", share.includes(`123 — 150/${MAX_SCORE}`));
+check("one line per figure", share.split("\n").filter((l) => /^\d\. /.test(l)).length === 3);
+check("is spoiler-free (no figure names)", !getDailyPeople(122).some((p) => share.includes(p.name)));
+check("ends with the game link", share.trim().endsWith(SHARE_URL));
+console.log(share.split("\n").map((l) => "  " + l).join("\n"));
 
 console.log("\nClues:");
 check("every figure has a category", people.every((p) => p.domain));
