@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Person } from "../types";
-import { MAX_SCORE, msUntilTomorrow } from "../lib/game";
+import { MAX_SCORE, buildShareText, msUntilTomorrow } from "../lib/game";
 
 interface Props {
   people: Person[];
@@ -15,15 +15,26 @@ function countdown(): string {
   )}`;
 }
 
-/** End-of-day recap: total score, per-figure breakdown, and a countdown. */
+/** End-of-day recap: total score, per-figure breakdown, share, and a countdown. */
 export default function Summary({ people, scores }: Props) {
   const [time, setTime] = useState(countdown);
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setTime(countdown()), 1000);
     return () => clearInterval(id);
   }, []);
 
   const total = scores.reduce((sum, s) => sum + s, 0);
+
+  async function share() {
+    try {
+      await navigator.clipboard.writeText(buildShareText(scores));
+    } catch {
+      /* clipboard blocked — still show the confirmation so the flow isn't stuck */
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
@@ -54,6 +65,14 @@ export default function Summary({ people, scores }: Props) {
           </div>
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={share}
+        className="rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white transition hover:bg-teal-700"
+      >
+        {copied ? "Copied!" : "Share result"}
+      </button>
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Come back tomorrow for 3 new figures ·{" "}

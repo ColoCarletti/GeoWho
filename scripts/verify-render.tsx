@@ -12,6 +12,7 @@ const check = (label: string, cond: boolean) => {
 };
 
 check("renders the GeoWho title", html.includes("GeoWho"));
+check("renders the Daily/Practice toggle", html.includes("Daily") && html.includes("Practice"));
 // SSR splits `Figure {n} of {ROUNDS}` across comment markers, so match the
 // static words rather than a contiguous "Figure 1 of 3" substring.
 check("renders the round progress", html.includes("Figure") && html.includes("of"));

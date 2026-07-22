@@ -14,9 +14,12 @@ and death dates. Name who it is.
 | Not at all | **0** |
 
 Each wrong guess automatically reveals the next hint (category → occupation →
-country). After the third figure you get your **total score out of 300**, and a
-countdown to the next day's three. Progress is saved, so the day resumes where
-you left off.
+country). After the third figure you get your **total score out of 300**, a
+**shareable** spoiler-free result, and a countdown to the next day's three.
+Progress is saved, so the day resumes where you left off.
+
+There's also a **Practice** mode: unlimited random figures with the same
+scoring ladder and a running session tally — no daily limit.
 
 ## Run it
 
@@ -46,12 +49,15 @@ npm run data       # rebuild the dataset from Wikidata (see below)
 
 ## Code layout
 
-- `src/lib/game.ts` — the game rules: daily selection, the pure scoring reducer
-  (`applyGuess`/`applyPick`), option builder, date helpers, constants.
+- `src/lib/game.ts` — the game rules: daily selection, random pick (practice),
+  the pure scoring reducer (`applyGuess`/`applyPick`), option builder, share
+  text, date helpers, constants.
 - `src/lib/people.ts` — dataset access, search, clues.
 - `src/lib/storage.ts` — daily progress persistence (`localStorage`).
-- `src/components/` — `Round` (the per-figure stage machine), `WorldMap`,
-  `GuessInput`, `Options`, `Clues`, `Summary`.
+- `src/App.tsx` — mode switcher (Daily / Practice).
+- `src/components/` — `Daily` and `Practice` (the two mode orchestrators),
+  `Round` (the per-figure stage machine), `WorldMap`, `GuessInput`, `Options`,
+  `Clues`, `Summary`.
 
 ## The data (Wikidata)
 

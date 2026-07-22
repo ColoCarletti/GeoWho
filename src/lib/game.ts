@@ -19,6 +19,9 @@ export const MAX_SCORE = ROUNDS * STAGE_SCORES[0];
 /** Number of choices shown at the multiple-choice stage. */
 export const OPTION_COUNT = 4;
 
+/** Where the game lives — used in the shareable result. */
+export const SHARE_URL = "https://colocarletti.github.io/GeoWho/";
+
 // --- round rules (pure) -----------------------------------------------------
 
 /** One round's progress: ids guessed wrong, and the score once decided. */
@@ -124,14 +127,22 @@ export function getDailyPeople(day: number = dayNumber()): Person[] {
   return picks;
 }
 
+/** A random figure for practice mode, optionally different from the last one. */
+export function getRandomPerson(excludeId?: string): Person {
+  const pool = excludeId ? people.filter((p) => p.id !== excludeId) : people;
+  const list = pool.length ? pool : people;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 /**
  * Multiple-choice options for the final stage: the answer plus lookalikes —
- * same category, closest in era — shuffled deterministically. Ids the player
- * already guessed wrong are excluded so options aren't trivially eliminated.
+ * same category, closest in era — shuffled deterministically for a given
+ * `seed` (the day number in daily mode; a per-figure seed in practice). Ids the
+ * player already guessed wrong are excluded so options aren't trivially cut.
  */
 export function buildOptions(
   person: Person,
-  day: number,
+  seed: number,
   excludeIds: string[] = []
 ): Person[] {
   const exclude = new Set([person.id, ...excludeIds]);
@@ -143,8 +154,26 @@ export function buildOptions(
     pool = people.filter((p) => !exclude.has(p.id));
   }
 
-  const rng = mulberry32(hashString(person.id) ^ day);
+  const rng = mulberry32(hashString(person.id) ^ seed);
   const near = pool.slice().sort(nearInEra).slice(0, 8);
   const distractors = shuffled(near, rng).slice(0, OPTION_COUNT - 1);
   return shuffled([person, ...distractors], rng);
+}
+
+/** How a round's score reads at a glance in the shared result. */
+function scoreEmoji(score: number): string {
+  if (score === STAGE_SCORES[0]) return "🟩"; // first try
+  if (score === STAGE_SCORES[1]) return "🟨"; // after a hint
+  if (score === STAGE_SCORES[2]) return "🟧"; // multiple choice
+  return "⬛"; // missed
+}
+
+/**
+ * A spoiler-free result to copy: total, one line per figure (emoji + points,
+ * no names), and a link. Names are omitted so sharing doesn't spoil the day.
+ */
+export function buildShareText(scores: number[], day: number = dayNumber()): string {
+  const total = scores.reduce((sum, s) => sum + s, 0);
+  const lines = scores.map((s, i) => `${i + 1}. ${scoreEmoji(s)} ${s} pts`);
+  return [`GeoWho #${day + 1} — ${total}/${MAX_SCORE}`, ...lines, SHARE_URL].join("\n");
 }
