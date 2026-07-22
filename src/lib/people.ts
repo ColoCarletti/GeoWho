@@ -25,13 +25,6 @@ export function getClues(p: Person): Clue[] {
   return clues;
 }
 
-/** A random figure, optionally different from the current one. */
-export function getRandomPerson(excludeId?: string): Person {
-  const pool = excludeId ? people.filter((p) => p.id !== excludeId) : people;
-  const list = pool.length ? pool : people;
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 export function findById(id: string): Person | undefined {
   return people.find((p) => p.id === id);
 }

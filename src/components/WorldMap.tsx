@@ -1,7 +1,7 @@
-import type { Person, WorldMap as WorldMapData } from "../types";
+import type { Person } from "../types";
+import { world } from "../lib/people";
 
 interface Props {
-  world: WorldMapData;
   person: Person;
 }
 
@@ -16,7 +16,7 @@ function Pin({ x, y, tone }: { x: number; y: number; tone: string }) {
 }
 
 /** The world map — a clean rectangular map with two location markers. */
-export default function WorldMap({ world, person }: Props) {
+export default function WorldMap({ person }: Props) {
   const { bx, by, dx, dy } = person;
   return (
     <div

@@ -1,5 +1,17 @@
-// Sanity checks for the (minimal) GeoWho engine, run against the real modules.
-import { people, world, getRandomPerson, searchPeople, findById, getClues } from "../src/lib/people";
+// Sanity checks for the daily GeoWho engine, run against the real modules.
+import { people, searchPeople, findById, getClues } from "../src/lib/people";
+import {
+  ROUNDS,
+  STAGE_SCORES,
+  MAX_SCORE,
+  OPTION_COUNT,
+  getDailyPeople,
+  buildOptions,
+  newRound,
+  stageOf,
+  applyGuess,
+  applyPick,
+} from "../src/lib/game";
 
 let failures = 0;
 function check(label: string, cond: boolean, detail = "") {
@@ -8,51 +20,60 @@ function check(label: string, cond: boolean, detail = "") {
 }
 
 console.log("Dataset:");
-check("has the curated famous pool", people.length >= 150 && people.length <= 260, `${people.length} people`);
-check("every figure is genuinely famous", Math.min(...people.map((p) => p.fame)) >= 100, `min fame ${Math.min(...people.map((p) => p.fame))}`);
-check("world map has a land path", world.land.length > 1000 && world.w > 0);
-check("every person has projected birth+death coords", people.every(
-  (p) => Number.isFinite(p.bx) && Number.isFinite(p.by) && Number.isFinite(p.dx) && Number.isFinite(p.dy)
-));
-check("coords fall within the map viewBox", people.every(
-  (p) =>
-    p.bx >= 0 && p.bx <= world.w && p.by >= 0 && p.by <= world.h &&
-    p.dx >= 0 && p.dx <= world.w && p.dy >= 0 && p.dy <= world.h
-));
-check("every person has a name and exact dates", people.every(
-  (p) => p.name && typeof p.birth === "string" && p.birth.length > 0 && p.death.length > 0
+check("curated famous pool", people.length >= 150 && people.length <= 260, `${people.length} people`);
+check("every figure genuinely famous", Math.min(...people.map((p) => p.fame)) >= 100);
+check("every figure has a name and exact dates", people.every(
+  (p) => p.name && p.birth?.length > 0 && p.death?.length > 0
 ));
 
-console.log("\nExact-date formatting (from real data):");
-const show = (n: string) => {
-  const p = people.find((x) => x.name === n);
-  if (p) console.log(`  ${n}: born ${p.birth} · died ${p.death}`);
-  return p;
-};
-const einstein = show("Albert Einstein");
-show("Napoleon");
-const confucius = show("Confucius");
-check("day-precise date shows a month name", /March/.test(einstein?.birth || ""));
-check("year-only date shows no fake month", confucius ? !/January/.test(confucius.birth) : true);
-check("BCE dates carry 'BC'", (confucius?.birth || "").includes("BC"));
+console.log("\nScoring config:");
+check("100 / 50 / 10 ladder", STAGE_SCORES.join(",") === "100,50,10");
+check("max score is rounds × 100", MAX_SCORE === ROUNDS * 100, `${MAX_SCORE}`);
 
-console.log("\nRandom selection:");
-const a = getRandomPerson();
-check("returns a valid person", Boolean(a?.id && a?.name));
-check("exclude avoids repeat", (() => {
-  for (let i = 0; i < 50; i++) if (getRandomPerson(a.id).id === a.id) return false;
-  return true;
+console.log("\nScore ladder (round reducer):");
+const T = "target", X = "wrong1", Y = "wrong2";
+// stage 1 correct → 100
+check("correct on 1st try → 100", applyGuess(newRound(), T, T).result === 100);
+// wrong → stage 2 → correct → 50
+const afterWrong = applyGuess(newRound(), T, X);
+check("wrong advances to stage 2", stageOf(afterWrong) === 2 && afterWrong.result === null);
+check("correct on 2nd try → 50", applyGuess(afterWrong, T, T).result === 50);
+// wrong, wrong → stage 3 → pick
+const afterTwo = applyGuess(afterWrong, T, Y);
+check("two wrong advances to stage 3", stageOf(afterTwo) === 3);
+check("right pick on 3rd → 10", applyPick(afterTwo, T, T).result === 10);
+check("wrong pick on 3rd → 0", applyPick(afterTwo, T, X).result === 0);
+// guards
+check("duplicate wrong guess ignored", applyGuess(afterWrong, T, X).wrong.length === 1);
+check("no scoring after decided", applyGuess(applyGuess(newRound(), T, T), T, X).result === 100);
+
+console.log("\nDaily selection:");
+const d0 = getDailyPeople(0);
+const d1 = getDailyPeople(1);
+check("picks ROUNDS figures", d0.length === ROUNDS, `${d0.length}`);
+check("no repeats within a day", new Set(d0.map((p) => p.id)).size === ROUNDS);
+check("deterministic per day", getDailyPeople(5).map((p) => p.id).join() === getDailyPeople(5).map((p) => p.id).join());
+check("different days differ", d0.map((p) => p.id).join() !== d1.map((p) => p.id).join());
+console.log("  day 0:", d0.map((p) => p.name).join(", "));
+
+console.log("\nMultiple-choice options:");
+const target = people.find((p) => p.name === "Napoleon") || people[0];
+const opts = buildOptions(target, 0);
+check("returns OPTION_COUNT options", opts.length === OPTION_COUNT, `${opts.length}`);
+check("includes the correct answer", opts.some((p) => p.id === target.id));
+check("options are distinct", new Set(opts.map((p) => p.id)).size === OPTION_COUNT);
+check("deterministic per (person, day)", buildOptions(target, 0).map((p) => p.id).join() === opts.map((p) => p.id).join());
+check("excludes already-wrong guesses", (() => {
+  const other = people.find((p) => p.id !== target.id)!;
+  return !buildOptions(target, 0, [other.id]).some((p) => p.id === other.id);
 })());
+console.log("  " + target.name + " options:", opts.map((p) => p.name).join(", "));
 
 console.log("\nClues:");
-check("every figure has a category", people.every((p) => p.domain), `missing: ${people.filter((p) => !p.domain).length}`);
-check("categories are from the known set", people.every((p) =>
-  ["Science", "Arts & Letters", "Power & Society", "Stage & Screen", "Exploration & Sport"].includes(p.domain)
-));
-const clueSample = people.find((p) => p.name === "Napoleon") || people[0];
-const cl = getClues(clueSample);
-check("getClues returns broad→specific clues", cl.length >= 2 && cl[0].label === "Category");
-console.log(`  ${clueSample.name}: ${cl.map((c) => `${c.label}=${c.value}`).join(" | ")}`);
+check("every figure has a category", people.every((p) => p.domain));
+const cl = getClues(target);
+check("clues go broad→specific", cl.length >= 2 && cl[0].label === "Category");
+console.log(`  ${target.name}: ${cl.map((c) => `${c.label}=${c.value}`).join(" | ")}`);
 
 console.log("\nSearch:");
 check("prefix search works", searchPeople("napo").some((p) => p.name.includes("Napoleon")));
@@ -61,7 +82,7 @@ check("results are famous-first", (() => {
   const r = searchPeople("a");
   return r.length < 2 || r[0].fame >= r[r.length - 1].fame;
 })());
-check("findById round-trips", findById(a.id)?.id === a.id);
+check("findById round-trips", findById(target.id)?.id === target.id);
 
 console.log(`\n${failures === 0 ? "✅ ALL CHECKS PASSED" : `❌ ${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

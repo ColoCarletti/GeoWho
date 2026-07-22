@@ -1,132 +1,112 @@
-import { useMemo, useState } from "react";
-import type { GameStatus, Person } from "./types";
-import { getRandomPerson, world } from "./lib/people";
-import WorldMap from "./components/WorldMap";
-import GuessInput from "./components/GuessInput";
-import Clues from "./components/Clues";
+import { useEffect, useMemo, useState } from "react";
+import type { Person } from "./types";
+import { getClues, findById } from "./lib/people";
+import {
+  ROUNDS,
+  applyGuess,
+  applyPick,
+  buildOptions,
+  dateKey,
+  dayNumber,
+  getDailyPeople,
+  newRound,
+  stageOf,
+  type RoundState,
+} from "./lib/game";
+import { loadDaily, saveDaily } from "./lib/storage";
+import Round from "./components/Round";
+import Summary from "./components/Summary";
 
 export default function App() {
-  const [target, setTarget] = useState<Person>(() => getRandomPerson());
-  const [status, setStatus] = useState<GameStatus>("playing");
-  const [wrong, setWrong] = useState<Person[]>([]);
+  const day = dayNumber();
+  const roster = useMemo(() => getDailyPeople(day), [day]);
+
+  // Persisted state: completed rounds' scores, plus the in-progress round.
+  const [scores, setScores] = useState<number[]>([]);
+  const [round, setRound] = useState<RoundState>(newRound);
+  const [loaded, setLoaded] = useState(false);
   const [shake, setShake] = useState(false);
 
-  const guessedIds = useMemo(() => new Set(wrong.map((p) => p.id)), [wrong]);
-  const playing = status === "playing";
-
-  function handleGuess(person: Person) {
-    if (!playing || guessedIds.has(person.id)) return;
-    if (person.id === target.id) {
-      setStatus("won");
-    } else {
-      setWrong((w) => [...w, person]);
-      setShake(true);
+  // Restore today's progress once, on mount.
+  useEffect(() => {
+    const saved = loadDaily();
+    if (saved) {
+      setScores(saved.scores);
+      setRound({ wrong: saved.wrong, result: saved.result });
     }
+    setLoaded(true);
+  }, []);
+
+  // Persist after every change (but not before the initial restore).
+  useEffect(() => {
+    if (!loaded) return;
+    saveDaily({ dateKey: dateKey(), scores, wrong: round.wrong, result: round.result });
+  }, [loaded, scores, round]);
+
+  const roundIndex = scores.length;
+  const done = roundIndex >= ROUNDS;
+  const person = roster[Math.min(roundIndex, ROUNDS - 1)];
+  const stage = stageOf(round);
+
+  const clues = useMemo(() => getClues(person), [person]);
+  const wrongPeople = useMemo(
+    () => round.wrong.map(findById).filter((p): p is Person => Boolean(p)),
+    [round.wrong]
+  );
+  const options = useMemo(
+    () => (stage >= 3 ? buildOptions(person, day, round.wrong) : []),
+    [person, stage, day] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const runningScore = scores.reduce((sum, s) => sum + s, 0);
+
+  function handleGuess(guess: Person) {
+    if (guess.id !== person.id) setShake(true);
+    setRound((r) => applyGuess(r, person.id, guess.id));
   }
 
-  function newFigure() {
-    setTarget(getRandomPerson(target.id));
-    setStatus("playing");
-    setWrong([]);
+  function handlePick(pick: Person) {
+    setRound((r) => applyPick(r, person.id, pick.id));
+  }
+
+  function nextRound() {
+    setScores((s) => [...s, round.result ?? 0]);
+    setRound(newRound());
   }
 
   return (
     <div className="flex min-h-full flex-col items-center bg-slate-50 px-4 py-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="flex w-full max-w-3xl flex-col gap-5">
-        <h1 className="text-center font-display text-2xl font-bold tracking-tight">
-          GeoWho
-        </h1>
+        <header className="text-center">
+          <h1 className="font-display text-2xl font-bold tracking-tight">GeoWho</h1>
+          {!done && (
+            <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+              Figure {roundIndex + 1} of {ROUNDS}
+              {runningScore > 0 && (
+                <> · <span className="tabular-nums">{runningScore}</span> pts</>
+              )}
+            </p>
+          )}
+        </header>
 
-        <WorldMap world={world} person={target} />
-
-        {/* the two facts always on screen: exact birth & death dates */}
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-1 text-base sm:text-lg">
-          <span className="flex items-center gap-2">
-            <span className="text-teal-600 dark:text-teal-400">★</span>
-            <span className="text-slate-500 dark:text-slate-400">Born</span>
-            <span className="font-semibold tabular-nums">{target.birth}</span>
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="text-rose-600 dark:text-rose-400">✝</span>
-            <span className="text-slate-500 dark:text-slate-400">Died</span>
-            <span className="font-semibold tabular-nums">{target.death}</span>
-          </span>
-        </div>
-
-        {playing ? (
-          <div className="flex flex-col gap-3">
-            <GuessInput
-              onGuess={handleGuess}
-              guessedIds={guessedIds}
-              shake={shake}
-              onShakeEnd={() => setShake(false)}
-            />
-
-            {wrong.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm text-slate-400 dark:text-slate-600">
-                {wrong.map((p) => (
-                  <span key={p.id} className="line-through">
-                    {p.name}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <Clues key={target.id} person={target} />
-
-            <div className="flex items-center justify-center gap-6 text-sm">
-              <button
-                type="button"
-                onClick={() => setStatus("revealed")}
-                className="text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
-              >
-                Reveal answer
-              </button>
-              <button
-                type="button"
-                onClick={newFigure}
-                className="text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
-              >
-                New figure →
-              </button>
-            </div>
-          </div>
+        {done ? (
+          <Summary people={roster} scores={scores} />
         ) : (
-          <Result won={status === "won"} name={target.name} onNext={newFigure} />
+          <Round
+            person={person}
+            stage={stage}
+            clues={clues}
+            wrong={wrongPeople}
+            options={options}
+            result={round.result}
+            isLast={roundIndex === ROUNDS - 1}
+            shake={shake}
+            onShakeEnd={() => setShake(false)}
+            onGuess={handleGuess}
+            onPick={handlePick}
+            onNext={nextRound}
+          />
         )}
       </div>
-    </div>
-  );
-}
-
-function Result({
-  won,
-  name,
-  onNext,
-}: {
-  won: boolean;
-  name: string;
-  onNext: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-3 text-center">
-      <p>
-        <span
-          className={`font-semibold ${
-            won ? "text-teal-600 dark:text-teal-400" : "text-slate-500 dark:text-slate-400"
-          }`}
-        >
-          {won ? "🎉 Correct" : "It was"}
-        </span>{" "}
-        <span className="font-display text-2xl">{name}</span>
-      </p>
-      <button
-        type="button"
-        onClick={onNext}
-        className="rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white transition hover:bg-teal-700"
-      >
-        New figure →
-      </button>
     </div>
   );
 }

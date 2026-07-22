@@ -1,22 +1,19 @@
-import { useState } from "react";
-import type { Person } from "../types";
-import { getClues } from "../lib/people";
+import type { Clue } from "../types";
 
 interface Props {
-  person: Person;
+  clues: Clue[];
+  /** How many clues to show (one is revealed after each wrong guess). */
+  revealed: number;
 }
 
-/**
- * On-demand hints, revealed one at a time (broad category → occupation →
- * country). Give this a `key={person.id}` so the reveal count resets per figure.
- */
-export default function Clues({ person }: Props) {
-  const [shown, setShown] = useState(0);
-  const clues = getClues(person);
+/** The hints unlocked so far this round, shown as amber chips. */
+export default function Clues({ clues, revealed }: Props) {
+  const shown = clues.slice(0, revealed);
+  if (shown.length === 0) return null;
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {clues.slice(0, shown).map((clue) => (
+      {shown.map((clue) => (
         <div
           key={clue.label}
           className="rounded-full border border-amber-300 bg-amber-50 px-4 py-1.5 text-sm dark:border-amber-700/60 dark:bg-amber-950/30"
@@ -27,16 +24,6 @@ export default function Clues({ person }: Props) {
           <span className="text-slate-800 dark:text-slate-100">{clue.value}</span>
         </div>
       ))}
-
-      {shown < clues.length && (
-        <button
-          type="button"
-          onClick={() => setShown((n) => n + 1)}
-          className="text-sm font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
-        >
-          💡 {shown === 0 ? "Need a clue?" : "Another clue"}
-        </button>
-      )}
     </div>
   );
 }
