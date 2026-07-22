@@ -1,112 +1,49 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Person } from "./types";
-import { getClues, findById } from "./lib/people";
-import {
-  ROUNDS,
-  applyGuess,
-  applyPick,
-  buildOptions,
-  dateKey,
-  dayNumber,
-  getDailyPeople,
-  newRound,
-  stageOf,
-  type RoundState,
-} from "./lib/game";
-import { loadDaily, saveDaily } from "./lib/storage";
-import Round from "./components/Round";
-import Summary from "./components/Summary";
+import { useState } from "react";
+import Daily from "./components/Daily";
+import Practice from "./components/Practice";
+
+type Mode = "daily" | "practice";
 
 export default function App() {
-  const day = dayNumber();
-  const roster = useMemo(() => getDailyPeople(day), [day]);
-
-  // Persisted state: completed rounds' scores, plus the in-progress round.
-  const [scores, setScores] = useState<number[]>([]);
-  const [round, setRound] = useState<RoundState>(newRound);
-  const [loaded, setLoaded] = useState(false);
-  const [shake, setShake] = useState(false);
-
-  // Restore today's progress once, on mount.
-  useEffect(() => {
-    const saved = loadDaily();
-    if (saved) {
-      setScores(saved.scores);
-      setRound({ wrong: saved.wrong, result: saved.result });
-    }
-    setLoaded(true);
-  }, []);
-
-  // Persist after every change (but not before the initial restore).
-  useEffect(() => {
-    if (!loaded) return;
-    saveDaily({ dateKey: dateKey(), scores, wrong: round.wrong, result: round.result });
-  }, [loaded, scores, round]);
-
-  const roundIndex = scores.length;
-  const done = roundIndex >= ROUNDS;
-  const person = roster[Math.min(roundIndex, ROUNDS - 1)];
-  const stage = stageOf(round);
-
-  const clues = useMemo(() => getClues(person), [person]);
-  const wrongPeople = useMemo(
-    () => round.wrong.map(findById).filter((p): p is Person => Boolean(p)),
-    [round.wrong]
-  );
-  const options = useMemo(
-    () => (stage >= 3 ? buildOptions(person, day, round.wrong) : []),
-    [person, stage, day] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const runningScore = scores.reduce((sum, s) => sum + s, 0);
-
-  function handleGuess(guess: Person) {
-    if (guess.id !== person.id) setShake(true);
-    setRound((r) => applyGuess(r, person.id, guess.id));
-  }
-
-  function handlePick(pick: Person) {
-    setRound((r) => applyPick(r, person.id, pick.id));
-  }
-
-  function nextRound() {
-    setScores((s) => [...s, round.result ?? 0]);
-    setRound(newRound());
-  }
+  const [mode, setMode] = useState<Mode>("daily");
 
   return (
     <div className="flex min-h-full flex-col items-center bg-slate-50 px-4 py-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="flex w-full max-w-3xl flex-col gap-5">
-        <header className="text-center">
+        <header className="flex flex-col items-center gap-3">
           <h1 className="font-display text-2xl font-bold tracking-tight">GeoWho</h1>
-          {!done && (
-            <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
-              Figure {roundIndex + 1} of {ROUNDS}
-              {runningScore > 0 && (
-                <> · <span className="tabular-nums">{runningScore}</span> pts</>
-              )}
-            </p>
-          )}
+          <ModeToggle mode={mode} onChange={setMode} />
         </header>
 
-        {done ? (
-          <Summary people={roster} scores={scores} />
-        ) : (
-          <Round
-            person={person}
-            stage={stage}
-            clues={clues}
-            wrong={wrongPeople}
-            options={options}
-            result={round.result}
-            isLast={roundIndex === ROUNDS - 1}
-            shake={shake}
-            onShakeEnd={() => setShake(false)}
-            onGuess={handleGuess}
-            onPick={handlePick}
-            onNext={nextRound}
-          />
-        )}
+        {/* remount on mode change so each mode starts clean (daily restores from storage) */}
+        {mode === "daily" ? <Daily /> : <Practice />}
       </div>
+    </div>
+  );
+}
+
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const modes: { id: Mode; label: string }[] = [
+    { id: "daily", label: "Daily" },
+    { id: "practice", label: "Practice" },
+  ];
+  return (
+    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm dark:border-slate-700 dark:bg-slate-800">
+      {modes.map(({ id, label }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={mode === id}
+          onClick={() => onChange(id)}
+          className={`rounded-md px-4 py-1.5 font-medium transition ${
+            mode === id
+              ? "bg-teal-600 text-white"
+              : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
