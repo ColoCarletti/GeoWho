@@ -27,11 +27,9 @@ export function getClues(p: Person): Clue[] {
 
 /** A random figure, optionally different from the current one. */
 export function getRandomPerson(excludeId?: string): Person {
-  let p = people[Math.floor(Math.random() * people.length)];
-  while (excludeId && p.id === excludeId && people.length > 1) {
-    p = people[Math.floor(Math.random() * people.length)];
-  }
-  return p;
+  const pool = excludeId ? people.filter((p) => p.id !== excludeId) : people;
+  const list = pool.length ? pool : people;
+  return list[Math.floor(Math.random() * list.length)];
 }
 
 export function findById(id: string): Person | undefined {

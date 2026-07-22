@@ -2,8 +2,8 @@
 // world map, and emit the two files the game consumes.
 //
 //   src/data/world.json   -> { w, h, land }  (base map SVG path)
-//   src/data/people.json  -> [{ id, name, fame, birthYear, deathYear,
-//                               bx, by, dx, dy, domain, occupations, country, gender }]
+//   src/data/people.json  -> [{ id, name, fame, birthYear, deathYear, birth, death,
+//                               bx, by, dx, dy, domain, occupation, country }]
 //
 // Points are pre-projected to pixel coords in the same viewBox as `land`, so the
 // runtime needs no projection library — it just plots x/y on the map path.

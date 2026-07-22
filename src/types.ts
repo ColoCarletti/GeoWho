@@ -30,6 +30,9 @@ export interface Clue {
   value: string;
 }
 
+/** Where a round is: still guessing, solved, or given up. */
+export type GameStatus = "playing" | "won" | "revealed";
+
 /** The base world map, pre-rendered to an SVG path. */
 export interface WorldMap {
   w: number;

@@ -5,10 +5,13 @@ import { searchPeople } from "../lib/people";
 interface Props {
   onGuess: (person: Person) => void;
   guessedIds: Set<string>;
+  /** When true, play the wrong-guess shake once. */
   shake?: boolean;
+  /** Fired when the shake animation finishes, so the parent can reset it. */
+  onShakeEnd?: () => void;
 }
 
-export default function GuessInput({ onGuess, guessedIds, shake }: Props) {
+export default function GuessInput({ onGuess, guessedIds, shake, onShakeEnd }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
@@ -42,7 +45,12 @@ export default function GuessInput({ onGuess, guessedIds, shake }: Props) {
   }
 
   return (
-    <div className={`relative ${shake ? "animate-[shake_0.4s]" : ""}`}>
+    <div
+      className={`relative ${shake ? "animate-[shake_0.4s]" : ""}`}
+      onAnimationEnd={(e) => {
+        if (e.animationName === "shake") onShakeEnd?.();
+      }}
+    >
       <input
         ref={inputRef}
         type="text"
