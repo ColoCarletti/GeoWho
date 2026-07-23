@@ -4,12 +4,24 @@
 
 :root {
   color-scheme: light dark;
-  --map-bg: #dbeafe; /* soft ocean */
+  --globe-hi: #cfe8fb; /* ocean highlight */
+  --globe-lo: #6fa8d6; /* ocean shadow */
+  --globe-halo: rgba(111, 168, 214, 0.25);
+  --globe-land: #86ba7d; /* continents */
+  --globe-border: rgba(255, 255, 255, 0.55); /* country borders */
+  --globe-grid: rgba(255, 255, 255, 0.28); /* graticule */
+  --globe-arc: rgba(255, 255, 255, 0.85); /* birth→death path */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --map-bg: #0f1a2e; /* deep ocean */
+    --globe-hi: #22496f;
+    --globe-lo: #0a1626;
+    --globe-halo: rgba(45, 90, 140, 0.3);
+    --globe-land: #3f855f;
+    --globe-border: rgba(255, 255, 255, 0.18);
+    --globe-grid: rgba(255, 255, 255, 0.08);
+    --globe-arc: rgba(226, 240, 255, 0.55);
   }
 }
 

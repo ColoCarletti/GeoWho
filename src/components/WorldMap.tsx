@@ -1,20 +1,190 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  geoOrthographic,
+  geoPath,
+  geoGraticule10,
+  geoDistance,
+  type GeoPermissibleObjects,
+} from "d3-geo";
+import { feature, mesh } from "topojson-client";
+import type { GeometryCollection } from "topojson-specification";
+import topoData from "world-atlas/countries-110m.json";
 import type { Person } from "../types";
-import { world } from "../lib/people";
 
-interface Props {
-  person: Person;
-}
+// Prepared once: filled landmass, interior country borders, and a graticule.
+const land = feature(topoData, topoData.objects.land as GeometryCollection);
+const borders = mesh(
+  topoData,
+  topoData.objects.countries as GeometryCollection,
+  (a, b) => a !== b
+);
+const graticule = geoGraticule10();
 
-const MIN_SCALE = 1;
-const MAX_SCALE = 8;
+const SIZE = 320;
+const C = SIZE / 2;
+const BASE_R = 150;
+const MIN_S = 1;
+const MAX_S = 4;
 const BIRTH = "#0d9488";
 const DEATH = "#e11d48";
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-/** A ★ (born) / ✝ (died) marker that keeps a constant screen size while zoomed. */
-function Marker({ x, y, glyph, tone, scale }: { x: number; y: number; glyph: string; tone: string; scale: number }) {
+/** Geographic midpoint of two points, so a figure's globe faces both markers. */
+function midpoint(aLng: number, aLat: number, bLng: number, bLat: number): [number, number] {
+  const d = Math.PI / 180;
+  const toVec = (lng: number, lat: number) => [
+    Math.cos(lat * d) * Math.cos(lng * d),
+    Math.cos(lat * d) * Math.sin(lng * d),
+    Math.sin(lat * d),
+  ];
+  const [ax, ay, az] = toVec(aLng, aLat);
+  const [bx, by, bz] = toVec(bLng, bLat);
+  const x = ax + bx;
+  const y = ay + by;
+  const z = az + bz;
+  const m = Math.hypot(x, y, z) || 1;
+  return [(Math.atan2(y, x) * 180) / Math.PI, (Math.asin(clamp(z / m, -1, 1)) * 180) / Math.PI];
+}
+
+interface Props {
+  person: Person;
+}
+
+export default function WorldMap({ person }: Props) {
+  const { blng, blat, dlng, dlat } = person;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ px: number; py: number; lng: number; lat: number } | null>(null);
+
+  const [center, setCenter] = useState<[number, number]>(() =>
+    midpoint(blng, blat, dlng, dlat)
+  );
+  const [scale, setScale] = useState(1);
+
+  // face both markers whenever the figure changes
+  useEffect(() => {
+    setCenter(midpoint(blng, blat, dlng, dlat));
+    setScale(1);
+  }, [person.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const path = useMemo(() => {
+    const projection = geoOrthographic()
+      .translate([C, C])
+      .scale(BASE_R * scale)
+      .clipAngle(90)
+      .rotate([-center[0], -center[1]]);
+    return { fn: geoPath(projection), projection };
+  }, [center, scale]);
+
+  const project = (lng: number, lat: number) => {
+    const visible = geoDistance([lng, lat], center) < Math.PI / 2;
+    const pt = path.projection([lng, lat]);
+    return { pt, visible: visible && !!pt };
+  };
+  const b = project(blng, blat);
+  const d = project(dlng, dlat);
+
+  // wheel to zoom (native listener so we can preventDefault)
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setScale((s) => clamp(s * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN_S, MAX_S));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    drag.current = { px: e.clientX, py: e.clientY, lng: center[0], lat: center[1] };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!drag.current) return;
+    const k = 0.32 / scale; // degrees per pixel, gentler when zoomed in
+    // Drag "grabs" the globe: the surface follows the cursor, so the view
+    // centre moves opposite to the drag.
+    setCenter([
+      drag.current.lng - (e.clientX - drag.current.px) * k,
+      clamp(drag.current.lat + (e.clientY - drag.current.py) * k, -85, 85),
+    ]);
+  }
+  function endDrag() {
+    drag.current = null;
+  }
+
+  const r = BASE_R * scale;
+  const btn =
+    "flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/90 text-lg font-semibold leading-none text-slate-700 shadow-sm backdrop-blur transition hover:bg-white disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-800";
+
+  return (
+    <div className="relative mx-auto w-full max-w-md">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        className="block w-full select-none"
+        role="img"
+        aria-label="Spinnable globe: ★ marks the birthplace, ✝ the place of death"
+        style={{ touchAction: "none", cursor: drag.current ? "grabbing" : "grab" }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerLeave={endDrag}
+      >
+        <defs>
+          <radialGradient id="ocean" cx="38%" cy="34%" r="75%">
+            <stop offset="0%" stopColor="var(--globe-hi)" />
+            <stop offset="100%" stopColor="var(--globe-lo)" />
+          </radialGradient>
+        </defs>
+
+        <circle cx={C} cy={C} r={r + 6} fill="var(--globe-halo)" />
+        <circle cx={C} cy={C} r={r} fill="url(#ocean)" />
+        <path d={path.fn(graticule) ?? ""} fill="none" stroke="var(--globe-grid)" strokeWidth={0.5} />
+        <path d={path.fn(land) ?? ""} fill="var(--globe-land)" />
+        <path d={path.fn(borders) ?? ""} fill="none" stroke="var(--globe-border)" strokeWidth={0.5} />
+        <path
+          d={
+            path.fn({
+              type: "LineString",
+              coordinates: [[blng, blat], [dlng, dlat]],
+            } as GeoPermissibleObjects) ?? ""
+          }
+          fill="none"
+          stroke="var(--globe-arc)"
+          strokeWidth={1.4}
+          strokeDasharray="1.5 5"
+          strokeLinecap="round"
+        />
+        {b.visible && <Marker x={b.pt![0]} y={b.pt![1]} glyph="★" tone={BIRTH} />}
+        {d.visible && <Marker x={d.pt![0]} y={d.pt![1]} glyph="✝" tone={DEATH} />}
+      </svg>
+
+      <div className="absolute right-1 top-1 flex flex-col gap-1.5">
+        <button type="button" className={btn} aria-label="Zoom in" onClick={() => setScale((s) => clamp(s * 1.5, MIN_S, MAX_S))} disabled={scale >= MAX_S}>
+          +
+        </button>
+        <button type="button" className={btn} aria-label="Zoom out" onClick={() => setScale((s) => clamp(s / 1.5, MIN_S, MAX_S))} disabled={scale <= MIN_S}>
+          −
+        </button>
+        <button
+          type="button"
+          className={btn}
+          aria-label="Reset view"
+          onClick={() => {
+            setCenter(midpoint(blng, blat, dlng, dlat));
+            setScale(1);
+          }}
+        >
+          ⟳
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Marker({ x, y, glyph, tone }: { x: number; y: number; glyph: string; tone: string }) {
   return (
     <text
       x={x}
@@ -22,138 +192,16 @@ function Marker({ x, y, glyph, tone, scale }: { x: number; y: number; glyph: str
       textAnchor="middle"
       dominantBaseline="central"
       style={{
-        fontSize: 26 / scale,
+        fontSize: 14,
         fontWeight: 700,
         fill: tone,
-        stroke: "var(--map-bg)",
-        strokeWidth: 5 / scale,
+        stroke: "var(--globe-lo)",
+        strokeWidth: 2.5,
         paintOrder: "stroke",
         pointerEvents: "none",
       }}
     >
       {glyph}
     </text>
-  );
-}
-
-/** The world map: a ★ at the birthplace, a ✝ at the place of death, with zoom + pan. */
-export default function WorldMap({ person }: Props) {
-  const { w, h, land } = world;
-  const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ px: number; py: number; cx: number; cy: number } | null>(null);
-
-  // scale + the map-space point held at the viewport centre
-  const [view, setView] = useState({ scale: 1, cx: w / 2, cy: h / 2 });
-  const viewRef = useRef(view);
-  useEffect(() => {
-    viewRef.current = view;
-  }, [view]);
-
-  // reset to the whole map whenever the figure changes
-  useEffect(() => {
-    setView({ scale: 1, cx: w / 2, cy: h / 2 });
-  }, [person.id, w, h]);
-
-  const vbW = w / view.scale;
-  const vbH = h / view.scale;
-  const vbX = clamp(view.cx - vbW / 2, 0, w - vbW);
-  const vbY = clamp(view.cy - vbH / 2, 0, h - vbH);
-
-  function zoomBy(factor: number) {
-    setView((v) => ({ ...v, scale: clamp(v.scale * factor, MIN_SCALE, MAX_SCALE) }));
-  }
-  function reset() {
-    setView({ scale: 1, cx: w / 2, cy: h / 2 });
-  }
-
-  // wheel-to-zoom, anchored at the cursor (native listener so we can preventDefault)
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      const { scale, cx, cy } = viewRef.current;
-      const rect = svg!.getBoundingClientRect();
-      const curW = w / scale;
-      const curH = h / scale;
-      const x0 = clamp(cx - curW / 2, 0, w - curW);
-      const y0 = clamp(cy - curH / 2, 0, h - curH);
-      const fracX = (e.clientX - rect.left) / rect.width;
-      const fracY = (e.clientY - rect.top) / rect.height;
-      const focusX = x0 + fracX * curW;
-      const focusY = y0 + fracY * curH;
-      const next = clamp(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN_SCALE, MAX_SCALE);
-      const newW = w / next;
-      const newH = h / next;
-      setView({ scale: next, cx: focusX - (fracX - 0.5) * newW, cy: focusY - (fracY - 0.5) * newH });
-    }
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, [w, h]);
-
-  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    drag.current = { px: e.clientX, py: e.clientY, cx: view.cx, cy: view.cy };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (!drag.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dxMap = ((e.clientX - drag.current.px) / rect.width) * vbW;
-    const dyMap = ((e.clientY - drag.current.py) / rect.height) * vbH;
-    setView((v) => ({ ...v, cx: drag.current!.cx - dxMap, cy: drag.current!.cy - dyMap }));
-  }
-  function endDrag() {
-    drag.current = null;
-  }
-
-  const btn =
-    "flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/90 text-lg font-semibold leading-none text-slate-700 shadow-sm backdrop-blur transition hover:bg-white disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-800";
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800"
-      style={{ background: "var(--map-bg)" }}
-    >
-      <svg
-        ref={svgRef}
-        viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
-        className="block w-full"
-        role="img"
-        aria-label="World map showing birthplace (star) and place of death (cross)"
-        style={{ touchAction: "none", cursor: view.scale > 1 ? "grab" : "default" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerLeave={endDrag}
-      >
-        <rect x={vbX} y={vbY} width={vbW} height={vbH} fill="var(--map-bg)" />
-        <path d={land} className="fill-slate-300 dark:fill-slate-700" />
-        <line
-          x1={person.bx}
-          y1={person.by}
-          x2={person.dx}
-          y2={person.dy}
-          className="stroke-slate-400/70 dark:stroke-slate-500/60"
-          strokeWidth={1.25}
-          strokeDasharray="1.5 6"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-        <Marker x={person.bx} y={person.by} glyph="★" tone={BIRTH} scale={view.scale} />
-        <Marker x={person.dx} y={person.dy} glyph="✝" tone={DEATH} scale={view.scale} />
-      </svg>
-
-      <div className="absolute right-2 top-2 flex flex-col gap-1.5">
-        <button type="button" className={btn} aria-label="Zoom in" onClick={() => zoomBy(1.6)} disabled={view.scale >= MAX_SCALE}>
-          +
-        </button>
-        <button type="button" className={btn} aria-label="Zoom out" onClick={() => zoomBy(1 / 1.6)} disabled={view.scale <= MIN_SCALE}>
-          −
-        </button>
-        <button type="button" className={btn} aria-label="Reset view" onClick={reset} disabled={view.scale === 1}>
-          ⟳
-        </button>
-      </div>
-    </div>
   );
 }

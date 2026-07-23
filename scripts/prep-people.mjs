@@ -1,41 +1,17 @@
-// Finish the dataset: parse dates/coords, project birth & death points onto a
-// world map, and emit the two files the game consumes.
+// Finish the dataset: parse dates/coords and emit the people the game uses.
 //
-//   src/data/world.json   -> { w, h, land }  (base map SVG path)
 //   src/data/people.json  -> [{ id, name, fame, birthYear, deathYear, birth, death,
-//                               bx, by, dx, dy, domain, occupation, country }]
+//                               blng, blat, dlng, dlat, domain, occupation, country }]
 //
-// Points are pre-projected to pixel coords in the same viewBox as `land`, so the
-// runtime needs no projection library — it just plots x/y on the map path.
+// The globe geometry is loaded at runtime from the world-atlas package and
+// projected in WorldMap.tsx, so here we only need each figure's raw lng/lat.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { geoEquirectangular, geoPath } from "d3-geo";
-import { feature } from "topojson-client";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-// A plain rectangular (equirectangular / plate-carrée) map: familiar, fills the
-// frame edge to edge with no oval or curved borders. Sphere ratio is exactly
-// 2:1, so a 2:1 viewBox is filled with no empty margins and no stretching.
-const W = 900;
-const H = 450;
-
-// --- base world map ---------------------------------------------------------
-const landTopo = JSON.parse(
-  readFileSync(join(root, "node_modules/world-atlas/land-110m.json"), "utf8")
-);
-const land = feature(landTopo, landTopo.objects.land);
-const projection = geoEquirectangular().fitSize([W, H], { type: "Sphere" });
-const pathGen = geoPath(projection);
-const round = (n) => Math.round(n * 10) / 10;
-const landPath = pathGen(land).replace(/-?\d+\.?\d*/g, (m) => String(round(parseFloat(m))));
-
-writeFileSync(
-  join(root, "src/data/world.json"),
-  JSON.stringify({ w: W, h: H, land: landPath })
-);
+const round1 = (n) => Math.round(n * 10) / 10;
 
 // --- people -----------------------------------------------------------------
 const raw = JSON.parse(readFileSync(join(root, "src/data/people-raw.json"), "utf8"));
@@ -130,13 +106,6 @@ for (const p of raw) {
     dropped++;
     continue;
   }
-  const bp = projection(b);
-  const dp = projection(d);
-  if (!bp || !dp) {
-    dropped++;
-    continue;
-  }
-
   // Clue fields, from real occupations. Fall back to the fetch-bucket domains
   // only if a person has no usable P106 list.
   let { domain, occupation } = categorize(p.p106 || []);
@@ -157,10 +126,11 @@ for (const p of raw) {
     deathYear,
     birth: formatDate(p.dob, p.dobP ?? 9),
     death: formatDate(p.dod, p.dodP ?? 9),
-    bx: Math.round(bp[0]),
-    by: Math.round(bp[1]),
-    dx: Math.round(dp[0]),
-    dy: Math.round(dp[1]),
+    // birthplace & place of death as raw coordinates
+    blng: round1(b[0]),
+    blat: round1(b[1]),
+    dlng: round1(d[0]),
+    dlat: round1(d[1]),
     // clue fields (broad → specific)
     domain,
     occupation,
@@ -179,9 +149,6 @@ const clean = cleanAll.slice(0, TOP_N);
 writeFileSync(join(root, "src/data/people.json"), JSON.stringify(clean));
 
 const bytes = readFileSync(join(root, "src/data/people.json")).length;
-console.log(
-  `Wrote ${clean.length} people (${(bytes / 1024).toFixed(0)} KB), dropped ${dropped}. ` +
-    `World map: ${(landPath.length / 1024).toFixed(0)} KB path.`
-);
+console.log(`Wrote ${clean.length} people (${(bytes / 1024).toFixed(0)} KB), dropped ${dropped}.`);
 console.log("Fame range:", clean[clean.length - 1]?.fame, "→", clean[0]?.fame);
 console.log("Sample top 5:", clean.slice(0, 5).map((p) => p.name).join(", "));
