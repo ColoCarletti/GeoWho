@@ -1,8 +1,8 @@
 # 🗺️ GeoWho
 
-A **daily "guess the historical figure" game**. A world map marks where a famous
-person was **born** (★) and where they **died** (✝), with their **exact** birth
-and death dates. Name who it is.
+A **daily "guess the historical figure" game**. A spinnable **globe** marks where
+a famous person was **born** (★) and where they **died** (✝), with their **exact**
+birth and death dates. Drag to rotate, scroll/buttons to zoom, then name who it is.
 
 **Three figures a day**, with a scoring ladder per figure:
 
@@ -71,10 +71,12 @@ occupation (small sets) and takes the top figures by fame within each:
 | `scripts/fetch-people-must.mjs` | Guarantees curated iconic figures by QID. |
 | `scripts/fetch-dates.mjs` | Adds each date's **precision** so exact dates are honest (no fake "1 January" for year-only records). |
 | `scripts/fetch-occupations.mjs` | Adds real P106 occupations, used to categorize each figure (clue #1). |
-| `scripts/prep-people.mjs` | Formats dates to their precision, **projects** each point onto the map with d3-geo, emits `src/data/people.json` + `src/data/world.json`. |
+| `scripts/prep-people.mjs` | Formats dates and emits `src/data/people.json` with each figure's raw lng/lat (`blng/blat/dlng/dlat`). |
 
-Points are pre-projected to pixel coordinates in the map's viewBox, so the
-runtime ships no projection library — it just plots x/y on the map path.
+`WorldMap.tsx` renders a realistic orthographic **globe** — filled continents,
+country borders, and a graticule — with `d3-geo` + `topojson-client` over the
+`world-atlas` land geometry (loaded at runtime). Drag rotates, wheel/buttons
+zoom, and the globe auto-faces the midpoint of the two locations.
 
 > Dates render at their true precision: day (`14 March 1879`), month, or year
 > (`550 BC`). A few otherwise-iconic figures can't be included when Wikidata has

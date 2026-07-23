@@ -28,6 +28,10 @@ check("every figure genuinely famous", Math.min(...people.map((p) => p.fame)) >=
 check("every figure has a name and exact dates", people.every(
   (p) => p.name && p.birth?.length > 0 && p.death?.length > 0
 ));
+const inRange = (lng: number, lat: number) => lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+check("every figure has valid birth/death coordinates", people.every(
+  (p) => inRange(p.blng, p.blat) && inRange(p.dlng, p.dlat)
+));
 
 console.log("\nScoring config:");
 check("100 / 50 / 10 ladder", STAGE_SCORES.join(",") === "100,50,10");

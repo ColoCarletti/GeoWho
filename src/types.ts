@@ -14,12 +14,12 @@ export interface Person {
   birth: string;
   /** Exact death date, e.g. "18 April 1955". */
   death: string;
-  /** Birthplace projected to map pixels (matches world.json viewBox). */
-  bx: number;
-  by: number;
-  /** Place of death projected to map pixels. */
-  dx: number;
-  dy: number;
+  /** Birthplace coordinates (degrees). */
+  blng: number;
+  blat: number;
+  /** Place-of-death coordinates (degrees). */
+  dlng: number;
+  dlat: number;
   /** Big category, e.g. "Science" (clue 1). */
   domain: string;
   /** Representative occupation, e.g. "physicist" (clue 2). */
@@ -49,9 +49,3 @@ export interface DailyProgress {
   result: number | null;
 }
 
-/** The base world map, pre-rendered to an SVG path. */
-export interface WorldMap {
-  w: number;
-  h: number;
-  land: string;
-}

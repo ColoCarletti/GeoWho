@@ -1,9 +1,7 @@
 import peopleData from "../data/people.json";
-import worldData from "../data/world.json";
-import type { Clue, Person, WorldMap } from "../types";
+import type { Clue, Person } from "../types";
 
 export const people = peopleData as Person[];
-export const world = worldData as WorldMap;
 
 const CATEGORY_ICON: Record<string, string> = {
   Science: "🔬",
